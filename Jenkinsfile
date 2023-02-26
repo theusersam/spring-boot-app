@@ -1,44 +1,48 @@
+pipeline {
+    agent any
+    environment {
+        DOCKERHUB_CREDENTIALS=credentials('docker_hub_cred')
+    }
 
-node {
-  
-  def image
-  def mvnHome = tool 'Maven3'
-
-  
-     stage ('checkout') {
-        checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '9ffd4ee4-3647-4a7d-a357-5e8746463282', url: 'https://bitbucket.org/ananthkannan/myawesomeangularapprepo/']]])       
-        }
-    
-    
-    stage ('Build') {
-            sh 'mvn -f MyAwesomeApp/pom.xml clean install'            
-        }
-        
-    stage ('archive') {
-            archiveArtifacts '**/*.jar'
-        }
-        
-    stage ('Docker Build') {
-         // Build and push image with Jenkins' docker-plugin
-        withDockerServer([uri: "tcp://localhost:4243"]) {
-
-            withDockerRegistry([credentialsId: "fa32f95a-2d3e-4c7b-8f34-11bcc0191d70", url: "https://index.docker.io/v1/"]) {
-            image = docker.build("ananthkannan/mywebapp", "MyAwesomeApp")
-            image.push()
-            
+    stages {
+        stage('git-checkout') {
+            steps {
+                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/mohammedashiqu/spring-boot-app.git']])
             }
         }
-    }
-    
-       stage('docker stop container') {
-            sh 'docker ps -f name=myContainer -q | xargs --no-run-if-empty docker container stop'
-            sh 'docker container ls -a -fname=myContainer -q | xargs -r docker container rm'
-
-       }
-
-    stage ('Docker run') {
-
-        image.run("-p 8085:8085 --rm --name myContainer")
-
+        stage('build-jar') {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+        stage('Delete-image') {
+            steps{
+                sh 'sudo docker rmi ashiqummathoor/my-image:latest'
+            }
+        }
+        stage('Building image') {
+            steps{
+                script {
+                    dockerImage = docker.build ("ashiqummathoor/my-image:${env.BUILD_ID}")
+                    dockerImage = docker.build ("ashiqummathoor/my-image:latest")
+                }
+            }
+        }
+        stage('login-to-dokcer-hub') {
+            steps {
+                sh 'sudo echo $DOCKERHUB_CREDENTIALS_PSW | sudo docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+            }
+        }
+        stage('push') {
+            steps {
+                sh 'sudo docker push ashiqummathoor/my-image:$BUILD_NUMBER'
+                sh 'sudo docker push ashiqummathoor/my-image:latest'
+            }
+        }
+        stage('apply-on-kubernetes-cluster') {
+            steps {
+                sh 'sudo kubectl replace --force -f kubernetes-app-ashiq.yaml'
+            }
+        }
     }
 }
