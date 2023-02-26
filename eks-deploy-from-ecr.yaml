@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: my-springboot-app
-        image: 211223789150.dkr.ecr.us-east-1.amazonaws.com/my-docker-repo
+        image: ashiqummathoor/my-image:28
         imagePullPolicy: Always
         ports:
         - containerPort: 8085
@@ -31,8 +31,9 @@ spec:
   ports:
   - name: http
     port: 80
+    nodePort: 30001
     protocol: TCP
     targetPort: 8085
-  type: LoadBalancer
+  type: NodePort
   selector:
     app: springboot-app
